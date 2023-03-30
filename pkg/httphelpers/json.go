@@ -3,8 +3,10 @@ package httphelpers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,7 +18,7 @@ const maxBytes int64 = 1_048_576
 // If you do not wish to handle the error and are fine with 400 response on error
 // feel free to use c.BindJSON(v)
 func JSONDecode(c *gin.Context, v any) error {
-	return jsonDecode(c, v, true)
+	return jsonDecode(c, v, false)
 }
 
 // JSONDecode will try to decode json into pointer v. In case of unknown fields, an error will be returned
@@ -36,7 +38,41 @@ func jsonDecode(c *gin.Context, v any, allowUnknownFields bool) error {
 	}
 	err := decoder.Decode(v)
 	if err != nil {
-		return err
+		var syntaxError *json.SyntaxError
+		var unmarshalTypeError *json.UnmarshalTypeError
+		var invalidUnmarshalError *json.InvalidUnmarshalError
+		var maxBytesError *http.MaxBytesError
+
+		switch {
+		case errors.As(err, &syntaxError):
+			return fmt.Errorf("request body contains badly-formed JSON (at position %d)", syntaxError.Offset)
+
+		case errors.Is(err, io.ErrUnexpectedEOF):
+			return errors.New("request body contains badly-formed JSON")
+
+		case errors.As(err, &unmarshalTypeError):
+			if unmarshalTypeError.Field != "" {
+				return fmt.Errorf("request body contains an invalid value for the %q field", unmarshalTypeError.Field)
+			}
+			return fmt.Errorf("request body contains incorrect JSON type (at position %d)", unmarshalTypeError.Offset)
+
+		case errors.Is(err, io.EOF):
+			return errors.New("request body must not be empty")
+
+		case strings.HasPrefix(err.Error(), "json: unknown field "):
+			fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
+			return fmt.Errorf("request body contains unknown field %s", fieldName)
+
+		case errors.As(err, &maxBytesError):
+			return fmt.Errorf("request body must not be larger than %d bytes", maxBytesError.Limit)
+
+		case errors.As(err, &invalidUnmarshalError):
+			panic(err)
+
+		default:
+			return err
+		}
+
 	}
 
 	if e := decoder.Decode(&struct{}{}); e != io.EOF {

@@ -8,6 +8,7 @@ import (
 
 	"greenlight/internal/movies/models"
 	"greenlight/pkg/httphelpers"
+	"greenlight/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +18,35 @@ type Handler struct {
 }
 
 func (h *Handler) CreateMovie(c *gin.Context) {
-	fmt.Fprintln(c.Writer, "Create a new movie")
+	var input struct {
+		Title   string         `json:"title"`
+		Year    int32          `json:"year"`
+		Runtime models.Runtime `json:"runtime"`
+		Genres  []string       `json:"genres"`
+	}
+
+	err := httphelpers.JSONDecode(c, &input)
+	if err != nil {
+		h.Logger.Println(err.Error())
+		httphelpers.StatusBadRequestResponse(c, err.Error())
+		return
+	}
+
+	movie := &models.Movie{
+		Title:   input.Title,
+		Year:    input.Year,
+		Runtime: input.Runtime,
+		Genres:  input.Genres,
+	}
+
+	v := validator.New()
+
+	if models.ValidateMovie(v, movie); !v.Valid() {
+		httphelpers.StatusUnprocesableEntities(c, v.Errors)
+		return
+	}
+
+	fmt.Fprintf(c.Writer, "%+v\n", input)
 }
 
 func (h *Handler) ShowMovie(c *gin.Context) {
