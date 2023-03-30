@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -119,6 +120,11 @@ func StatusForbiddenJSONPayloadResponse(c *gin.Context, payload any) error {
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(http.StatusNotFound, payload)
 func StatusNotFoundPayloadResponse(c *gin.Context, payload any) {
 	CustomStatusPayloadResponse(c, http.StatusNotFound, payload, ContentTypeJSON)
+}
+
+func StatusMethodNotAllowedResponse(c *gin.Context) {
+	message := gin.H{"error": fmt.Sprintf("the %s method is not allowed for the requested URL", c.Request.Method)}
+	CustomStatusJSONPayloadResponse(c, http.StatusMethodNotAllowed, message)
 }
 
 // CustomStatusJSONPayloadResponse is a shorthand for CustomStatusPayloadResponse with ContentTypeJSON

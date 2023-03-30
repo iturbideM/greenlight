@@ -14,6 +14,7 @@ import (
 	healthcheckRouter "greenlight/internal/healthcheck/router"
 	moviesHandler "greenlight/internal/movies/handlers"
 	moviesRouter "greenlight/internal/movies/router"
+	"greenlight/pkg/httphelpers"
 )
 
 const version = "1.0.0"
@@ -37,8 +38,15 @@ func main() {
 
 	engine := gin.Default()
 	engine.HandleMethodNotAllowed = true
-	healthcheckRouter.InitRouter(engine, healtcheckHandler)
-	moviesRouter.InitRouter(engine, moviesHandler)
+
+	engine.NoRoute(gin.HandlerFunc(httphelpers.StatusNotFoundResponse))
+	engine.NoMethod(gin.HandlerFunc(httphelpers.StatusMethodNotAllowedResponse))
+
+	v1 := engine.Group("/v1")
+	{
+		healthcheckRouter.InitRouter(v1, healtcheckHandler)
+		moviesRouter.InitRouter(v1, moviesHandler)
+	}
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),

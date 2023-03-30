@@ -7,7 +7,7 @@ type Handler interface {
 	ShowMovie(c *gin.Context)
 }
 
-func InitRouter(engine *gin.Engine, handler Handler) {
+func InitRouter(engine *gin.RouterGroup, handler Handler) {
 	movies := engine.Group("/movies")
 	{
 		movies.POST("", handler.CreateMovie)
