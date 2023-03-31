@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -11,11 +10,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
 	healthcheckHandler "greenlight/internal/healthcheck/handlers"
 	healthcheckRouter "greenlight/internal/healthcheck/router"
 	moviesHandler "greenlight/internal/movies/handlers"
+	moviesRepo "greenlight/internal/movies/repo"
 	moviesRouter "greenlight/internal/movies/router"
 	"greenlight/pkg/httphelpers"
 )
@@ -62,6 +63,7 @@ func main() {
 
 	moviesHandler := &moviesHandler.Handler{
 		Logger: logger,
+		Repo:   moviesRepo.NewSqlxRepo(db),
 	}
 
 	engine := gin.Default()
@@ -89,8 +91,8 @@ func main() {
 	logger.Fatal(err)
 }
 
-func openDB(cfg config) (*sql.DB, error) {
-	db, err := sql.Open("postgres", cfg.db.dsn)
+func openDB(cfg config) (*sqlx.DB, error) {
+	db, err := sqlx.Connect("postgres", cfg.db.dsn)
 	if err != nil {
 		return nil, err
 	}
