@@ -20,6 +20,7 @@ type Logger interface {
 type Repo interface {
 	Insert(movie *models.Movie) error
 	Get(id int64) (*models.Movie, error)
+	GetAll(title string, genres []string, filters httphelpers.Filters) ([]*models.Movie, error)
 	Update(movie *models.Movie) error
 	Delete(id int64) error
 }
@@ -83,19 +84,149 @@ func (h *Handler) ShowMovie(c *gin.Context) {
 
 	movie, err := h.Repo.Get(id)
 	if err != nil {
-		fmt.Printf("aaa error: %v\n", err)
 		switch {
 		case errors.Is(err, repositoryerrors.ErrRecordNotFound):
-			fmt.Printf("aa1 error: %v\n", err)
 			httphelpers.StatusNotFoundResponse(c)
 		default:
-			fmt.Printf("aa2 error: %v\n", err)
 			httphelpers.StatusInternalServerErrorResponse(c, err)
 		}
 		return
 	}
 
 	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movie": movie}, nil)
+	if err != nil {
+		h.Logger.Println(err)
+		httphelpers.StatusInternalServerErrorResponse(c, err)
+	}
+}
+
+func (h *Handler) UpdateMovie(c *gin.Context) {
+	id, err := httphelpers.ReadIDParam(c)
+	if err != nil {
+		httphelpers.StatusNotFoundResponse(c)
+		return
+	}
+
+	movie, err := h.Repo.Get(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, repositoryerrors.ErrRecordNotFound):
+			httphelpers.StatusNotFoundResponse(c)
+		default:
+			httphelpers.StatusInternalServerErrorResponse(c, err)
+		}
+		return
+	}
+
+	var input struct {
+		Title   *string         `json:"title"`
+		Year    *int32          `json:"year"`
+		Runtime *models.Runtime `json:"runtime"`
+		Genres  []string        `json:"genres"`
+	}
+
+	err = httphelpers.JSONDecode(c, &input)
+	if err != nil {
+		h.Logger.Println(err.Error())
+		httphelpers.StatusBadRequestResponse(c, err.Error())
+		return
+	}
+
+	if input.Title != nil {
+		movie.Title = *input.Title
+	}
+	if input.Year != nil {
+		movie.Year = *input.Year
+	}
+	if input.Runtime != nil {
+		movie.Runtime = *input.Runtime
+	}
+	if input.Genres != nil {
+		movie.Genres = input.Genres
+	}
+
+	v := validator.New()
+
+	if models.ValidateMovie(v, movie); !v.Valid() {
+		httphelpers.StatusUnprocesableEntities(c, v.Errors)
+		return
+	}
+
+	err = h.Repo.Update(movie)
+	if err != nil {
+		h.Logger.Println(err.Error())
+		switch {
+		case errors.Is(err, repositoryerrors.ErrEditConflict):
+			httphelpers.StatusConflictResponse(c)
+		default:
+			httphelpers.StatusInternalServerErrorResponse(c, err)
+		}
+		return
+	}
+
+	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movie": movie}, nil)
+	if err != nil {
+		h.Logger.Println(err)
+		httphelpers.StatusInternalServerErrorResponse(c, err)
+	}
+}
+
+func (h *Handler) DeleteMovie(c *gin.Context) {
+	id, err := httphelpers.ReadIDParam(c)
+	if err != nil {
+		httphelpers.StatusNotFoundResponse(c)
+		return
+	}
+
+	err = h.Repo.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, repositoryerrors.ErrRecordNotFound):
+			httphelpers.StatusNotFoundResponse(c)
+		default:
+			httphelpers.StatusInternalServerErrorResponse(c, err)
+		}
+		return
+	}
+
+	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"message": "movie successfully deleted"}, nil)
+	if err != nil {
+		h.Logger.Println(err)
+		httphelpers.StatusInternalServerErrorResponse(c, err)
+	}
+}
+
+func (h *Handler) ListMovies(c *gin.Context) {
+	var input struct {
+		Title  string
+		Genres []string
+		httphelpers.Filters
+	}
+
+	v := validator.New()
+
+	qs := c.Request.URL.Query()
+
+	input.Title = httphelpers.ReadString(qs, "title", "")
+	input.Genres = httphelpers.ReadCSV(qs, "genres", []string{})
+	input.Filters.Page = httphelpers.ReadInt(qs, "page", 1, v)
+	input.Filters.PageSize = httphelpers.ReadInt(qs, "page_size", 10, v)
+	input.Filters.Sort = httphelpers.ReadString(qs, "sort", "id")
+	input.Filters.SortSafeList = []string{"id", "title", "year", "runtime", "-id", "-title", "-year", "-runtime"}
+
+	if httphelpers.ValidateFilters(v, input.Filters); !v.Valid() {
+		httphelpers.StatusUnprocesableEntities(c, v.Errors)
+		return
+	}
+
+	movies, err := h.Repo.GetAll(input.Title, input.Genres, input.Filters)
+	if err != nil {
+		h.Logger.Println(err.Error())
+		httphelpers.StatusInternalServerErrorResponse(c, err)
+		return
+	}
+
+	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movies": movies}, nil)
 	if err != nil {
 		h.Logger.Println(err)
 		httphelpers.StatusInternalServerErrorResponse(c, err)
