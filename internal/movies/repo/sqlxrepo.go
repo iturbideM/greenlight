@@ -67,7 +67,6 @@ func (r *sqlxRepo) Get(id int64) (*models.Movie, error) {
 	}
 
 	err := row.Scan(
-		&[]byte{},
 		&movie.ID,
 		&movie.CreatedAt,
 		&movie.Title,
