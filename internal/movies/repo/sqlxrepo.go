@@ -24,13 +24,13 @@ func NewSqlxRepo(db *sqlx.DB) *sqlxRepo {
 	}
 }
 
-func (r *sqlxRepo) Insert(movie *models.Movie) error {
+func (r *sqlxRepo) Insert(ctx context.Context, movie *models.Movie) error {
 	query := `
 	INSERT INTO movies (title, year, runtime, genres) 
 	VALUES ($1, $2, $3, $4)
 	RETURNING id, created_at, version`
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	row := r.db.QueryRowxContext(ctx, query, movie.Title, movie.Year, movie.Runtime, pq.Array(movie.Genres))
@@ -61,21 +61,7 @@ func (r *sqlxRepo) Get(id int64) (*models.Movie, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	row := r.db.QueryRowxContext(ctx, query, id)
-	if err := row.Err(); err != nil {
-		return nil, err
-	}
-
-	err := row.Scan(
-		&[]byte{},
-		&movie.ID,
-		&movie.CreatedAt,
-		&movie.Title,
-		&movie.Year,
-		&movie.Runtime,
-		pq.Array(&movie.Genres),
-		&movie.Version,
-	)
+	err := r.db.GetContext(ctx, &movie, query, id)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -88,7 +74,7 @@ func (r *sqlxRepo) Get(id int64) (*models.Movie, error) {
 	return &movie, nil
 }
 
-func (r *sqlxRepo) Update(movie *models.Movie) error {
+func (r *sqlxRepo) Update(movie models.Movie) (models.Movie, error) {
 	query := `UPDATE movies
 			SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
 			WHERE id = $5 AND version = $6
@@ -110,12 +96,12 @@ func (r *sqlxRepo) Update(movie *models.Movie) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return repositoryerrors.ErrEditConflict
+			return models.Movie{}, repositoryerrors.ErrEditConflict
 		default:
-			return err
+			return models.Movie{}, err
 		}
 	}
-	return nil
+	return movie, nil
 }
 
 func (r *sqlxRepo) Delete(id int64) error {

@@ -85,7 +85,7 @@ func (h *Handler) ShowMovie(c *gin.Context) {
 	movie, err := h.Repo.Get(id)
 	if err != nil {
 		switch {
-		case errors.Is(err, repositoryerrors.ErrRecordNotFound):
+		case errors.Is(err, repositoryerrors.ErrRecordNotFound): // err == repositoryerrors.ErrRecordNotFound:
 			httphelpers.StatusNotFoundResponse(c)
 		default:
 			httphelpers.StatusInternalServerErrorResponse(c, err)
