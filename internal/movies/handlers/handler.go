@@ -15,13 +15,15 @@ import (
 )
 
 type Logger interface {
-	Println(v ...interface{})
+	PrintInfo(message string, properties map[string]string)
+	PrintError(err error, properties map[string]string)
+	PrintFatal(err error, properties map[string]string)
 }
 
 type Repo interface {
 	Insert(context.Context, *models.Movie) error
 	Get(id int64) (*models.Movie, error)
-	GetAll(title string, genres []string, filters httphelpers.Filters) ([]*models.Movie, error)
+	GetAll(title string, genres []string, filters httphelpers.Filters) ([]*models.Movie, httphelpers.Metadata, error)
 	Update(movie models.Movie) (models.Movie, error)
 	Delete(id int64) error
 }
@@ -41,7 +43,7 @@ func (h *Handler) CreateMovie(c *gin.Context) {
 
 	err := httphelpers.JSONDecode(c, &input)
 	if err != nil {
-		h.Logger.Println(err.Error())
+		h.Logger.PrintError(err, nil)
 		httphelpers.StatusBadRequestResponse(c, err.Error())
 		return
 	}
@@ -64,7 +66,6 @@ func (h *Handler) CreateMovie(c *gin.Context) {
 
 	err = h.Repo.Insert(ctx, movie)
 	if err != nil {
-		h.Logger.Println(err.Error())
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 		return
 	}
@@ -98,7 +99,6 @@ func (h *Handler) ShowMovie(c *gin.Context) {
 
 	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movie": movie}, nil)
 	if err != nil {
-		h.Logger.Println(err)
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
 }
@@ -130,7 +130,6 @@ func (h *Handler) UpdateMovie(c *gin.Context) {
 
 	err = httphelpers.JSONDecode(c, &input)
 	if err != nil {
-		h.Logger.Println(err.Error())
 		httphelpers.StatusBadRequestResponse(c, err.Error())
 		return
 	}
@@ -157,7 +156,6 @@ func (h *Handler) UpdateMovie(c *gin.Context) {
 
 	*movie, err = h.Repo.Update(*movie)
 	if err != nil {
-		h.Logger.Println(err.Error())
 		switch {
 		case errors.Is(err, repositoryerrors.ErrEditConflict):
 			httphelpers.StatusConflictResponse(c)
@@ -169,7 +167,6 @@ func (h *Handler) UpdateMovie(c *gin.Context) {
 
 	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movie": movie}, nil)
 	if err != nil {
-		h.Logger.Println(err)
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
 }
@@ -194,7 +191,6 @@ func (h *Handler) DeleteMovie(c *gin.Context) {
 
 	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"message": "movie successfully deleted"}, nil)
 	if err != nil {
-		h.Logger.Println(err)
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
 }
@@ -222,16 +218,14 @@ func (h *Handler) ListMovies(c *gin.Context) {
 		return
 	}
 
-	movies, err := h.Repo.GetAll(input.Title, input.Genres, input.Filters)
+	movies, metadata, err := h.Repo.GetAll(input.Title, input.Genres, input.Filters)
 	if err != nil {
-		h.Logger.Println(err.Error())
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 		return
 	}
 
-	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movies": movies}, nil)
+	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movies": movies, "metadata": metadata}, nil)
 	if err != nil {
-		h.Logger.Println(err)
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
 }

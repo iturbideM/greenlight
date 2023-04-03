@@ -77,9 +77,8 @@ func StatusUnprocesableEntities(c *gin.Context, errors map[string]string) {
 // StatusInternalServerErrorResponse sets an empty 500 response and loads errors into context,
 // in order to be accessible to middlewares
 func StatusInternalServerErrorResponse(c *gin.Context, err error) {
-	// c.Error(err)
+	c.Error(err)
 	// c.Status(http.StatusInternalServerError)
-
 	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }
 
@@ -134,6 +133,10 @@ func StatusMethodNotAllowedResponse(c *gin.Context) {
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(status, payload)
 func CustomStatusJSONPayloadResponse(c *gin.Context, status int, payload any) error {
 	return CustomStatusPayloadResponse(c, status, payload, ContentTypeJSON)
+}
+
+func RateLimitExceededResponse(c *gin.Context) {
+	CustomStatusJSONPayloadResponse(c, http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
 }
 
 // If you do not want to handle the error, and are ok with a 400 response on error, feel free to use gin context's functions
