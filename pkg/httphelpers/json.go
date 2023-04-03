@@ -44,7 +44,7 @@ func jsonDecode(c *gin.Context, v any, allowUnknownFields bool) error {
 		var maxBytesError *http.MaxBytesError
 
 		switch {
-		case errors.As(err, &syntaxError):
+		case errors.As(err, &syntaxError): // syntaxError, ok := err.(*json.SyntaxError); ok
 			return fmt.Errorf("request body contains badly-formed JSON (at position %d)", syntaxError.Offset)
 
 		case errors.Is(err, io.ErrUnexpectedEOF):
