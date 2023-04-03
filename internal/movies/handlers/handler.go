@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,10 +19,10 @@ type Logger interface {
 }
 
 type Repo interface {
-	Insert(movie *models.Movie) error
+	Insert(context.Context, *models.Movie) error
 	Get(id int64) (*models.Movie, error)
 	GetAll(title string, genres []string, filters httphelpers.Filters) ([]*models.Movie, error)
-	Update(movie *models.Movie) error
+	Update(movie models.Movie) (models.Movie, error)
 	Delete(id int64) error
 }
 
@@ -59,7 +60,9 @@ func (h *Handler) CreateMovie(c *gin.Context) {
 		return
 	}
 
-	err = h.Repo.Insert(movie)
+	ctx := context.Background()
+
+	err = h.Repo.Insert(ctx, movie)
 	if err != nil {
 		h.Logger.Println(err.Error())
 		httphelpers.StatusInternalServerErrorResponse(c, err)
@@ -152,7 +155,7 @@ func (h *Handler) UpdateMovie(c *gin.Context) {
 		return
 	}
 
-	err = h.Repo.Update(movie)
+	*movie, err = h.Repo.Update(*movie)
 	if err != nil {
 		h.Logger.Println(err.Error())
 		switch {

@@ -7,13 +7,13 @@ import (
 )
 
 type Movie struct {
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"-"`
-	Title     string    `json:"title"`
-	Year      int32     `json:"year,omitempty"`
-	Runtime   Runtime   `json:"runtime,omitempty"`
-	Genres    []string  `json:"genres,omitempty"`
-	Version   int32     `json:"version"`
+	ID        int64     `json:"id" db:"id"`
+	CreatedAt time.Time `json:"-" db:"created_at"`
+	Title     string    `json:"title" db:"title"`
+	Year      int32     `json:"year,omitempty" db:"year"`
+	Runtime   Runtime   `json:"runtime,omitempty" db:"runtime"`
+	Genres    []string  `json:"genres,omitempty" db:"genres"`
+	Version   int32     `json:"version" db:"version"`
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {

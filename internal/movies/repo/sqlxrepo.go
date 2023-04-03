@@ -61,7 +61,28 @@ func (r *sqlxRepo) Get(id int64) (*models.Movie, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := r.db.GetContext(ctx, &movie, query, id)
+	// Esta seria la mejor forma de hacerlo con sqlx, el problema es que el Scan interno
+	// que hace GetContext no funciona con arrays, entonces para que funcione bien
+	// deberia crearme un DABO de tipo Movie y luego hacer un scan a ese tipo de dato
+
+	// err := r.db.GetContext(ctx, &movie, query, id)
+
+	// Esta es la forma que lo hace el libro. No esta tan buena, pero
+	// prefiero hacerlo asi ahora porque me da pereza hacer el DABO de Movie
+	row := r.db.QueryRowxContext(ctx, query, id)
+	if err := row.Err(); err != nil {
+		return nil, err
+	}
+
+	err := row.Scan(
+		&movie.ID,
+		&movie.CreatedAt,
+		&movie.Title,
+		&movie.Year,
+		&movie.Runtime,
+		pq.Array(&movie.Genres),
+		&movie.Version,
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):

@@ -77,8 +77,10 @@ func StatusUnprocesableEntities(c *gin.Context, errors map[string]string) {
 // StatusInternalServerErrorResponse sets an empty 500 response and loads errors into context,
 // in order to be accessible to middlewares
 func StatusInternalServerErrorResponse(c *gin.Context, err error) {
-	c.Error(err)
-	c.Status(http.StatusInternalServerError)
+	// c.Error(err)
+	// c.Status(http.StatusInternalServerError)
+
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }
 
 // StatusOKJSONPayloadResponse is a shorthand for CustomStatusJSONPayloadResponse with status 200
