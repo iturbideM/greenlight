@@ -3,24 +3,16 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
-	"log"
-	"net/http"
 	"os"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
 	healthcheckHandler "greenlight/internal/healthcheck/handlers"
-	healthcheckRouter "greenlight/internal/healthcheck/router"
 	moviesHandler "greenlight/internal/movies/handlers"
 	moviesRepo "greenlight/internal/movies/repo"
-	moviesRouter "greenlight/internal/movies/router"
-	"greenlight/pkg/httphelpers"
 	"greenlight/pkg/jsonlog"
-	"greenlight/pkg/middlewares"
 )
 
 const version = "1.0.0"
@@ -78,36 +70,10 @@ func main() {
 		Repo:   moviesRepo.NewSqlxRepo(db),
 	}
 
-	engine := gin.Default()
-	engine.HandleMethodNotAllowed = true
-
-	engine.NoRoute(gin.HandlerFunc(httphelpers.StatusNotFoundResponse))
-	engine.NoMethod(gin.HandlerFunc(httphelpers.StatusMethodNotAllowedResponse))
-	engine.Use(middlewares.LogErrorMiddleware(logger))
-	engine.Use(middlewares.RecoverPanic())
-	engine.Use(middlewares.RateLimit(int(cfg.limiter.rps), cfg.limiter.burst, cfg.limiter.enabled, logger))
-
-	v1 := engine.Group("/v1")
-	{
-		healthcheckRouter.InitRouter(v1, healtcheckHandler)
-		moviesRouter.InitRouter(v1, moviesHandler)
+	err = Serve(logger, cfg, healtcheckHandler, moviesHandler)
+	if err != nil {
+		logger.PrintFatal(err, nil)
 	}
-
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      engine,
-		ErrorLog:     log.New(logger, "", 0),
-		IdleTimeout:  time.Minute,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	logger.PrintInfo("starting server", map[string]string{
-		"addr": srv.Addr,
-		"env":  cfg.env,
-	})
-	err = srv.ListenAndServe()
-	logger.PrintFatal(err, nil)
 }
 
 func openDB(cfg config) (*sqlx.DB, error) {
