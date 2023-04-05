@@ -19,14 +19,23 @@ import (
 	"greenlight/pkg/httphelpers"
 	"greenlight/pkg/jsonlog"
 	"greenlight/pkg/middlewares"
+	"greenlight/pkg/taskutils"
 
 	"github.com/gin-gonic/gin"
 )
 
-func Serve(l *jsonlog.Logger, cfg config, healtcheckHandler *healthcheckHandler.Handler, moviesHandler *moviesHandler.Handler, userHandler *userHandler.Handler) error {
+type Info struct {
+	healthcheckHandler *healthcheckHandler.Handler
+	moviesHandler      *moviesHandler.Handler
+	userHandler        *userHandler.Handler
+	logger             *jsonlog.Logger
+	cfg                config
+}
+
+func Serve(info Info) error {
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      startRouter(l, cfg, healtcheckHandler, moviesHandler, userHandler),
+		Addr:         fmt.Sprintf(":%d", info.cfg.port),
+		Handler:      startRouter(info),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -39,19 +48,29 @@ func Serve(l *jsonlog.Logger, cfg config, healtcheckHandler *healthcheckHandler.
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		s := <-quit
 
-		l.PrintInfo("shutting down server", map[string]string{
+		info.logger.PrintInfo("shutting down server", map[string]string{
 			"signal": s.String(),
 		})
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		shutdownError <- srv.Shutdown(ctx)
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			shutdownError <- err
+		}
+
+		info.logger.PrintInfo("completing background tasks", map[string]string{
+			"addr": srv.Addr,
+		})
+
+		taskutils.WaitAll()
+		shutdownError <- nil
 	}()
 
-	l.PrintInfo("starting server", map[string]string{
+	info.logger.PrintInfo("starting server", map[string]string{
 		"addr": srv.Addr,
-		"env":  cfg.env,
+		"env":  info.cfg.env,
 	})
 
 	err := srv.ListenAndServe()
@@ -64,36 +83,28 @@ func Serve(l *jsonlog.Logger, cfg config, healtcheckHandler *healthcheckHandler.
 		return err
 	}
 
-	l.PrintInfo("server stopped", map[string]string{
+	info.logger.PrintInfo("server stopped", map[string]string{
 		"addr": srv.Addr,
 	})
 
 	return nil
 }
 
-type Handlers struct {
-	healthcheckHandler *healthcheckHandler.Handler
-	moviesHandler      *moviesHandler.Handler
-	userHandler        *userHandler.Handler
-}
-
-func startRouter(l *jsonlog.Logger, cfg config, healthcheckHandler *healthcheckHandler.Handler,
-	moviesHandler *moviesHandler.Handler, userHandler *userHandler.Handler,
-) *gin.Engine {
+func startRouter(info Info) *gin.Engine {
 	engine := gin.Default()
 	engine.HandleMethodNotAllowed = true
 
 	engine.NoRoute(gin.HandlerFunc(httphelpers.StatusNotFoundResponse))
 	engine.NoMethod(gin.HandlerFunc(httphelpers.StatusMethodNotAllowedResponse))
-	engine.Use(middlewares.LogErrorMiddleware(l))
+	engine.Use(middlewares.LogErrorMiddleware(info.logger))
 	engine.Use(middlewares.RecoverPanic())
-	engine.Use(middlewares.RateLimit(int(cfg.limiter.rps), cfg.limiter.burst, cfg.limiter.enabled, l))
+	engine.Use(middlewares.RateLimit(int(info.cfg.limiter.rps), info.cfg.limiter.burst, info.cfg.limiter.enabled, info.logger))
 
 	v1 := engine.Group("/v1")
 	{
-		healthcheckRouter.InitRouter(v1, healthcheckHandler)
-		moviesRouter.InitRouter(v1, moviesHandler)
-		userRouter.InitRouter(v1, userHandler)
+		healthcheckRouter.InitRouter(v1, info.healthcheckHandler)
+		moviesRouter.InitRouter(v1, info.moviesHandler)
+		userRouter.InitRouter(v1, info.userHandler)
 	}
 
 	return engine

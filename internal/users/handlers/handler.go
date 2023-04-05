@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 
 	"greenlight/internal/repositoryerrors"
 	"greenlight/internal/users/models"
 	"greenlight/pkg/httphelpers"
 	"greenlight/pkg/mailer"
+	"greenlight/pkg/taskutils"
 	"greenlight/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -27,9 +29,10 @@ type Repo interface {
 }
 
 type Handler struct {
-	Repo   Repo
-	Logger Logger
-	Mailer mailer.Mailer
+	Repo      Repo
+	Logger    Logger
+	Mailer    mailer.Mailer
+	WaitGroup *sync.WaitGroup
 }
 
 func (h *Handler) Register(c *gin.Context) {
@@ -77,13 +80,16 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	err = h.Mailer.Send(user.Email, "user_welcome.tmpl", user)
-	if err != nil {
-		httphelpers.StatusInternalServerErrorResponse(c, err)
-		return
-	}
+	go func() {
+		taskutils.BackgroundTask(h.Logger, func() {
+			err = h.Mailer.Send(user.Email, "user_welcome.tmpl", user)
+			if err != nil {
+				h.Logger.PrintError(err, nil)
+			}
+		})
+	}()
 
-	httphelpers.WriteJson(c, http.StatusCreated, httphelpers.Envelope{"user": user}, nil)
+	err = httphelpers.WriteJson(c, http.StatusCreated, httphelpers.Envelope{"user": user}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}

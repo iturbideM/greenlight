@@ -92,7 +92,15 @@ func main() {
 		Mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
-	err = Serve(logger, cfg, healtcheckHandler, moviesHandler, userHandler)
+	info := Info{
+		healthcheckHandler: healtcheckHandler,
+		moviesHandler:      moviesHandler,
+		userHandler:        userHandler,
+		logger:             logger,
+		cfg:                cfg,
+	}
+
+	err = Serve(info)
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}

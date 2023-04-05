@@ -2,26 +2,13 @@ package taskutils
 
 import (
 	"fmt"
-	"log"
 	"sync"
 )
 
-type LogFunc func(v any)
+var wg = sync.WaitGroup{}
 
-var (
-	logFunc LogFunc
-	wg      = sync.WaitGroup{}
-)
-
-func init() {
-	logFunc = func(v any) { log.Default().Print(v) }
-}
-
-// Set the function to use for logging on panic recovery
-//
-// By default, it uses log.Default().Print to log the panic
-func SetLogger(f LogFunc) {
-	logFunc = f
+type Logger interface {
+	PrintError(err error, properties map[string]string)
 }
 
 // Setup Background task with with recover, and assures graceful exit on program exit
@@ -31,12 +18,12 @@ func SetLogger(f LogFunc) {
 //
 // Technically a little bit slower than using a goroutine, if you know it will not panic and don't care about
 // a graceful exit, you should use a goroutine.
-func BackgroundTask(task func()) {
+func BackgroundTask(logger Logger, task func()) {
 	wg.Add(1)
 	defer func() {
 		defer wg.Done()
 		if err := recover(); err != nil {
-			logFunc(fmt.Errorf("%s", err))
+			logger.PrintError(fmt.Errorf("%s", err), nil)
 		}
 	}()
 
