@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"greenlight/internal/movies/models"
-	"greenlight/internal/movies/repositoryerrors"
+	"greenlight/internal/repositoryerrors"
 	"greenlight/pkg/httphelpers"
 	"greenlight/pkg/validator"
 

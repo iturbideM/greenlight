@@ -14,6 +14,8 @@ import (
 	healthcheckRouter "greenlight/internal/healthcheck/router"
 	moviesHandler "greenlight/internal/movies/handlers"
 	moviesRouter "greenlight/internal/movies/router"
+	userHandler "greenlight/internal/users/handlers"
+	userRouter "greenlight/internal/users/router"
 	"greenlight/pkg/httphelpers"
 	"greenlight/pkg/jsonlog"
 	"greenlight/pkg/middlewares"
@@ -21,10 +23,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Serve(l *jsonlog.Logger, cfg config, healtcheckHandler *healthcheckHandler.Handler, moviesHandler *moviesHandler.Handler) error {
+func Serve(l *jsonlog.Logger, cfg config, healtcheckHandler *healthcheckHandler.Handler, moviesHandler *moviesHandler.Handler, userHandler *userHandler.Handler) error {
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      startRouter(l, cfg, healtcheckHandler, moviesHandler),
+		Handler:      startRouter(l, cfg, healtcheckHandler, moviesHandler, userHandler),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -69,7 +71,15 @@ func Serve(l *jsonlog.Logger, cfg config, healtcheckHandler *healthcheckHandler.
 	return nil
 }
 
-func startRouter(l *jsonlog.Logger, cfg config, healtcheckHandler *healthcheckHandler.Handler, moviesHandler *moviesHandler.Handler) *gin.Engine {
+type Handlers struct {
+	healthcheckHandler *healthcheckHandler.Handler
+	moviesHandler      *moviesHandler.Handler
+	userHandler        *userHandler.Handler
+}
+
+func startRouter(l *jsonlog.Logger, cfg config, healthcheckHandler *healthcheckHandler.Handler,
+	moviesHandler *moviesHandler.Handler, userHandler *userHandler.Handler,
+) *gin.Engine {
 	engine := gin.Default()
 	engine.HandleMethodNotAllowed = true
 
@@ -81,8 +91,9 @@ func startRouter(l *jsonlog.Logger, cfg config, healtcheckHandler *healthcheckHa
 
 	v1 := engine.Group("/v1")
 	{
-		healthcheckRouter.InitRouter(v1, healtcheckHandler)
+		healthcheckRouter.InitRouter(v1, healthcheckHandler)
 		moviesRouter.InitRouter(v1, moviesHandler)
+		userRouter.InitRouter(v1, userHandler)
 	}
 
 	return engine

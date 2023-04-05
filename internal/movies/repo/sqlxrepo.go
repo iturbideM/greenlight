@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"greenlight/internal/movies/models"
-	"greenlight/internal/movies/repositoryerrors"
+	"greenlight/internal/repositoryerrors"
 	"greenlight/pkg/httphelpers"
 
 	"github.com/jmoiron/sqlx"

@@ -12,7 +12,10 @@ import (
 	healthcheckHandler "greenlight/internal/healthcheck/handlers"
 	moviesHandler "greenlight/internal/movies/handlers"
 	moviesRepo "greenlight/internal/movies/repo"
+	userHandler "greenlight/internal/users/handlers"
+	userRepo "greenlight/internal/users/repo"
 	"greenlight/pkg/jsonlog"
+	"greenlight/pkg/mailer"
 )
 
 const version = "1.0.0"
@@ -32,6 +35,13 @@ type config struct {
 		burst   int
 		enabled bool
 	}
+	smtp struct {
+		host     string
+		port     int
+		username string
+		password string
+		sender   string
+	}
 }
 
 func main() {
@@ -48,6 +58,12 @@ func main() {
 	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
 	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+
+	flag.StringVar(&cfg.smtp.host, "smtp-host", "sandbox.smtp.mailtrap.io", "SMTP host")
+	flag.IntVar(&cfg.smtp.port, "smtp-port", 25, "SMTP port")
+	flag.StringVar(&cfg.smtp.username, "smtp-username", "470a33d889c91a", "SMTP username")
+	flag.StringVar(&cfg.smtp.password, "smtp-password", "7f9cd8765d2352", "SMTP password")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Greenlight <no-reply@greenlight.net>", "SMTP sender")
 
 	flag.Parse()
 
@@ -70,7 +86,13 @@ func main() {
 		Repo:   moviesRepo.NewSqlxRepo(db),
 	}
 
-	err = Serve(logger, cfg, healtcheckHandler, moviesHandler)
+	userHandler := &userHandler.Handler{
+		Logger: logger,
+		Repo:   userRepo.NewSqlxRepo(db),
+		Mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+	}
+
+	err = Serve(logger, cfg, healtcheckHandler, moviesHandler, userHandler)
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}
