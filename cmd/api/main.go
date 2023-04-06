@@ -87,9 +87,10 @@ func main() {
 	}
 
 	userHandler := &userHandler.Handler{
-		Logger: logger,
-		Repo:   userRepo.NewSqlxRepo(db),
-		Mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		Logger:    logger,
+		UserRepo:  userRepo.NewUserSqlxRepo(db),
+		TokenRepo: userRepo.NewTokenSqlxRepo(db),
+		Mailer:    mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
 	info := Info{

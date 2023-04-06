@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"sync"
+	"time"
 
 	"greenlight/internal/repositoryerrors"
 	"greenlight/internal/users/models"
@@ -22,17 +22,23 @@ type Logger interface {
 	PrintFatal(err error, properties map[string]string)
 }
 
-type Repo interface {
+type UserRepo interface {
 	Insert(context.Context, *models.User) error
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	Update(ctx context.Context, user *models.User) error
 }
 
+type TokenRepo interface {
+	New(userID int64, ttl time.Duration, scope string) (*models.Token, error)
+	Insert(token *models.Token) error
+	DeleteAllForUser(scope string, userID int64) error
+}
+
 type Handler struct {
-	Repo      Repo
+	UserRepo  UserRepo
+	TokenRepo TokenRepo
 	Logger    Logger
 	Mailer    mailer.Mailer
-	WaitGroup *sync.WaitGroup
 }
 
 func (h *Handler) Register(c *gin.Context) {
@@ -67,7 +73,7 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	err = h.Repo.Insert(c, user)
+	err = h.UserRepo.Insert(c, user)
 	if err != nil {
 		switch {
 		case errors.Is(err, repositoryerrors.ErrDuplicateEmail):
@@ -80,9 +86,19 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
+	token, err := h.TokenRepo.New(user.ID, 24*3*time.Hour, models.ScopeActivation)
+	if err != nil {
+		httphelpers.StatusInternalServerErrorResponse(c, err)
+		return
+	}
+
 	go func() {
 		taskutils.BackgroundTask(h.Logger, func() {
-			err = h.Mailer.Send(user.Email, "user_welcome.tmpl", user)
+			data := map[string]any{
+				"activationToken": token.Plaintext,
+				"userID":          user.ID,
+			}
+			err = h.Mailer.Send(user.Email, "user_welcome.tmpl", data)
 			if err != nil {
 				h.Logger.PrintError(err, nil)
 			}
@@ -90,6 +106,61 @@ func (h *Handler) Register(c *gin.Context) {
 	}()
 
 	err = httphelpers.WriteJson(c, http.StatusCreated, httphelpers.Envelope{"user": user}, nil)
+	if err != nil {
+		httphelpers.StatusInternalServerErrorResponse(c, err)
+	}
+}
+
+func (h *Handler) ActivateUser(c *gin.Context) {
+	var input struct {
+		TokenPlaintext string `json:"token"`
+	}
+
+	err := httphelpers.JSONDecode(c, &input)
+	if err != nil {
+		httphelpers.StatusBadRequestResponse(c, err.Error())
+		return
+	}
+
+	v := validator.New()
+
+	if models.ValidateTokenPLaintext(v, input.TokenPlaintext); !v.Valid() {
+		httphelpers.StatusUnprocesableEntities(c, v.Errors)
+		return
+	}
+
+	user, err := h.UserRepo.GetForToken(models.ScopeActivation, input.TokenPlaintext)
+	if err != nil {
+		switch {
+		case errors.Is(err, repositoryerrors.ErrRecordNotFound):
+			v.AddError("token", "invalid or expired activation token")
+			httphelpers.StatusUnprocesableEntities(c, v.Errors)
+		default:
+			httphelpers.StatusInternalServerErrorResponse(c, err)
+		}
+		return
+	}
+
+	user.Activated = true
+
+	err = h.UserRepo.Update(c, user)
+	if err != nil {
+		switch {
+		case errors.Is(err, repositoryerrors.ErrEditConflict):
+			httphelpers.StatusConflictResponse(c)
+		default:
+			httphelpers.StatusInternalServerErrorResponse(c, err)
+		}
+		return
+	}
+
+	err = h.TokenRepo.DeleteAllForUser(models.ScopeActivation, user.ID)
+	if err != nil {
+		httphelpers.StatusInternalServerErrorResponse(c, err)
+		return
+	}
+
+	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"user": user}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
