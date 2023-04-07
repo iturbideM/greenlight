@@ -29,7 +29,7 @@ func (r *UserRepo) Insert(ctx context.Context, user *models.User) error {
 	VALUES ($1, $2, $3, $4)
 	RETURNING id, created_at, version`
 
-	args := []any{user.Name, user.Email, user.Password.Hash(), user.Activated}
+	args := []any{user.Name, user.Email, user.Password.Hash, user.Activated}
 
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -58,7 +58,15 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	err := r.db.GetContext(ctx, &user, query, email)
+	err := r.db.QueryRowxContext(ctx, query, email).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.Name,
+		&user.Email,
+		&user.Password.Hash,
+		&user.Activated,
+		&user.Version,
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -105,7 +113,7 @@ func (r *UserRepo) Update(ctx context.Context, user *models.User) error {
 	return nil
 }
 
-func (r *UserRepo) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
+func (r *UserRepo) GetForToken(tokenScope, tokenPlaintext string) (*models.User, error) {
 	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
 
 	query := `
@@ -124,7 +132,16 @@ func (r *UserRepo) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := r.db.GetContext(ctx, &user, query, args...)
+	// err := r.db.GetContext(ctx, &user, query, args...)
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.Name,
+		&user.Email,
+		&user.Password.Hash,
+		&user.Activated,
+		&user.Version,
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):

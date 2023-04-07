@@ -1,17 +1,26 @@
 package middlewares
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
+	"greenlight/internal/repositoryerrors"
+	"greenlight/internal/users/models"
 	"greenlight/pkg/httphelpers"
 	"greenlight/pkg/jsonlog"
+	"greenlight/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
 )
+
+type UserRepo interface {
+	GetForToken(tokenScope, tokenPlaintext string) (*models.User, error)
+}
 
 func RecoverPanic() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -90,5 +99,48 @@ func RateLimit(ratelimit, tokens int, enabled bool, l *jsonlog.Logger) gin.Handl
 
 			mu.Unlock()
 		}
+	}
+}
+
+func Authenticate(UserRepo UserRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Vary", "Authorization")
+
+		authorizationHeader := c.GetHeader("Authorization")
+		if authorizationHeader == "" {
+			httphelpers.ContextSetUser(c, models.AnonymousUser)
+			c.Next()
+			return
+		}
+
+		headerParts := strings.Split(authorizationHeader, " ")
+		if len(headerParts) != 2 || strings.ToLower(headerParts[0]) != "bearer" {
+			httphelpers.StatusUnauthorizedResponse(c)
+			c.Abort()
+			return
+		}
+
+		token := headerParts[1]
+
+		v := validator.New()
+		if models.ValidateTokenPlaintext(v, token); !v.Valid() {
+			httphelpers.StatusUnauthorizedResponse(c)
+			c.Abort()
+			return
+		}
+
+		user, err := UserRepo.GetForToken(models.ScopeAuthentication, token)
+		if err != nil {
+			switch {
+			case errors.Is(err, repositoryerrors.ErrRecordNotFound):
+				httphelpers.StatusUnauthorizedResponse(c)
+			default:
+				httphelpers.StatusInternalServerErrorResponse(c, err)
+			}
+			c.Abort()
+			return
+		}
+
+		httphelpers.ContextSetUser(c, user)
 	}
 }

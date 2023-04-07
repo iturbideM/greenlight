@@ -12,8 +12,8 @@ import (
 	healthcheckHandler "greenlight/internal/healthcheck/handlers"
 	moviesHandler "greenlight/internal/movies/handlers"
 	moviesRepo "greenlight/internal/movies/repo"
-	userHandler "greenlight/internal/users/handlers"
-	userRepo "greenlight/internal/users/repo"
+	userHandlers "greenlight/internal/users/handlers"
+	userRepos "greenlight/internal/users/repo"
 	"greenlight/pkg/jsonlog"
 	"greenlight/pkg/mailer"
 )
@@ -86,17 +86,24 @@ func main() {
 		Repo:   moviesRepo.NewSqlxRepo(db),
 	}
 
-	userHandler := &userHandler.Handler{
+	userHandler := &userHandlers.UserHandler{
 		Logger:    logger,
-		UserRepo:  userRepo.NewUserSqlxRepo(db),
-		TokenRepo: userRepo.NewTokenSqlxRepo(db),
+		UserRepo:  userRepos.NewUserSqlxRepo(db),
+		TokenRepo: userRepos.NewTokenSqlxRepo(db),
 		Mailer:    mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+	}
+
+	tokenHandler := &userHandlers.TokenHandler{
+		UserRepo:  userRepos.NewUserSqlxRepo(db),
+		TokenRepo: userRepos.NewTokenSqlxRepo(db),
 	}
 
 	info := Info{
 		healthcheckHandler: healtcheckHandler,
 		moviesHandler:      moviesHandler,
 		userHandler:        userHandler,
+		tokenHandler:       tokenHandler,
+		userRepo:           userRepos.NewUserSqlxRepo(db),
 		logger:             logger,
 		cfg:                cfg,
 	}
