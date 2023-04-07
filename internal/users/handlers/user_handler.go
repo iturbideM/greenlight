@@ -35,11 +35,16 @@ type TokenRepo interface {
 	DeleteAllForUser(scope string, userID int64) error
 }
 
+type PermissionsRepo interface {
+	AddForUser(userID int64, codes ...string) error
+}
+
 type UserHandler struct {
-	UserRepo  UserRepo
-	TokenRepo TokenRepo
-	Logger    Logger
-	Mailer    mailer.Mailer
+	UserRepo        UserRepo
+	TokenRepo       TokenRepo
+	PermissionsRepo PermissionsRepo
+	Logger          Logger
+	Mailer          mailer.Mailer
 }
 
 func (h *UserHandler) Register(c *gin.Context) {
@@ -84,6 +89,12 @@ func (h *UserHandler) Register(c *gin.Context) {
 			httphelpers.StatusInternalServerErrorResponse(c, err)
 		}
 
+		return
+	}
+
+	err = h.PermissionsRepo.AddForUser(user.ID, "movies:read")
+	if err != nil {
+		httphelpers.StatusInternalServerErrorResponse(c, err)
 		return
 	}
 

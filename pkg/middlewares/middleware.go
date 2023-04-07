@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
+	permissionsModels "greenlight/internal/permissions/models"
 	"greenlight/internal/repositoryerrors"
-	"greenlight/internal/users/models"
+	userModels "greenlight/internal/users/models"
 	"greenlight/pkg/httphelpers"
 	"greenlight/pkg/jsonlog"
 	"greenlight/pkg/validator"
@@ -19,7 +20,11 @@ import (
 )
 
 type UserRepo interface {
-	GetForToken(tokenScope, tokenPlaintext string) (*models.User, error)
+	GetForToken(tokenScope, tokenPlaintext string) (*userModels.User, error)
+}
+
+type PermissionsRepo interface {
+	GetAllForUser(userID int64) (permissionsModels.Permissions, error)
 }
 
 func RecoverPanic() gin.HandlerFunc {
@@ -108,7 +113,7 @@ func Authenticate(UserRepo UserRepo) gin.HandlerFunc {
 
 		authorizationHeader := c.GetHeader("Authorization")
 		if authorizationHeader == "" {
-			httphelpers.ContextSetUser(c, models.AnonymousUser)
+			httphelpers.ContextSetUser(c, userModels.AnonymousUser)
 			c.Next()
 			return
 		}
@@ -123,13 +128,13 @@ func Authenticate(UserRepo UserRepo) gin.HandlerFunc {
 		token := headerParts[1]
 
 		v := validator.New()
-		if models.ValidateTokenPlaintext(v, token); !v.Valid() {
+		if userModels.ValidateTokenPlaintext(v, token); !v.Valid() {
 			httphelpers.StatusUnauthorizedResponse(c)
 			c.Abort()
 			return
 		}
 
-		user, err := UserRepo.GetForToken(models.ScopeAuthentication, token)
+		user, err := UserRepo.GetForToken(userModels.ScopeAuthentication, token)
 		if err != nil {
 			switch {
 			case errors.Is(err, repositoryerrors.ErrRecordNotFound):
@@ -143,4 +148,56 @@ func Authenticate(UserRepo UserRepo) gin.HandlerFunc {
 
 		httphelpers.ContextSetUser(c, user)
 	}
+}
+
+func RequireAuthenticatedUser(next gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := httphelpers.ContextGetUser(c)
+		if user.IsAnonymous() {
+			httphelpers.StatusUnauthorizedResponse(c)
+			c.Abort()
+			return
+		}
+
+		next(c)
+	}
+}
+
+func RequireActivatedUser(next gin.HandlerFunc) gin.HandlerFunc {
+	fn := func(c *gin.Context) {
+		user := httphelpers.ContextGetUser(c)
+
+		if !user.Activated {
+			httphelpers.StatusForbiddenResponse(c)
+			c.Abort()
+			return
+		}
+
+		next(c)
+	}
+
+	return RequireAuthenticatedUser(fn)
+}
+
+func RequirePermission(permissionsRepo PermissionsRepo, code string) gin.HandlerFunc {
+	fn := func(c *gin.Context) {
+		user := httphelpers.ContextGetUser(c)
+
+		permissions, err := permissionsRepo.GetAllForUser(user.ID)
+		if err != nil {
+			httphelpers.StatusInternalServerErrorResponse(c, err)
+			c.Abort()
+			return
+		}
+
+		if !permissions.Include(code) {
+			httphelpers.StatusForbiddenResponse(c)
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+
+	return RequireActivatedUser(fn)
 }

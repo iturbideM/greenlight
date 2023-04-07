@@ -14,6 +14,7 @@ import (
 	healthcheckRouter "greenlight/internal/healthcheck/router"
 	moviesHandler "greenlight/internal/movies/handlers"
 	moviesRouter "greenlight/internal/movies/router"
+	permissionsRepo "greenlight/internal/permissions/repo"
 	userHandler "greenlight/internal/users/handlers"
 	userRepo "greenlight/internal/users/repo"
 	userRouter "greenlight/internal/users/router"
@@ -30,6 +31,7 @@ type Info struct {
 	moviesHandler      *moviesHandler.Handler
 	userHandler        *userHandler.UserHandler
 	userRepo           *userRepo.UserRepo
+	permissionsRepo    *permissionsRepo.Repo
 	tokenHandler       *userHandler.TokenHandler
 	logger             *jsonlog.Logger
 	cfg                config
@@ -107,7 +109,7 @@ func startRouter(info Info) *gin.Engine {
 	v1 := engine.Group("/v1")
 	{
 		healthcheckRouter.InitRouter(v1, info.healthcheckHandler)
-		moviesRouter.InitRouter(v1, info.moviesHandler)
+		moviesRouter.InitRouter(v1, info.moviesHandler, info.permissionsRepo)
 		userRouter.InitRouter(v1, info.userHandler, info.tokenHandler)
 	}
 
