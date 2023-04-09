@@ -64,17 +64,19 @@ func (r *sqlxRepo) Get(id int64) (*models.Movie, error) {
 
 	// Esta seria la mejor forma de hacerlo con sqlx, el problema es que el Scan interno
 	// que hace GetContext no funciona con arrays, entonces para que funcione bien
-	// deberia crearme un DABO de tipo Movie y luego hacer un scan a ese tipo de dato
+	// deberia crearme un DAO (Data Access Object) de tipo Movie y luego hacer un scan a ese tipo de dato
 
 	// err := r.db.GetContext(ctx, &movie, query, id)
 
 	// Esta es la forma que lo hace el libro. No esta tan buena, pero
-	// prefiero hacerlo asi ahora porque me da pereza hacer el DABO de Movie
+	// prefiero hacerlo asi ahora porque me da pereza hacer el DAO de Movie
+	// 😡
 	row := r.db.QueryRowxContext(ctx, query, id)
 	if err := row.Err(); err != nil {
 		return nil, err
 	}
 
+	// esto lo podes extraer a una funcion, lo volves a usar en GetAll
 	err := row.Scan(
 		&movie.ID,
 		&movie.CreatedAt,
@@ -154,6 +156,8 @@ func (r *sqlxRepo) Delete(id int64) error {
 }
 
 func (r *sqlxRepo) GetAll(title string, genres []string, filters httphelpers.Filters) ([]*models.Movie, httphelpers.Metadata, error) {
+	// acordate que aca solo podes hacer esto si estas 100% seguro que el dato esta sanitizado
+	// JAMAS hagas esto con datos que no esten sanitizados porque te pueden hacer una inyeccion de SQL
 	query := fmt.Sprintf(`
 			SELECT count(*) OVER(), id, created_at, title, year, runtime, genres, version
 			FROM movies

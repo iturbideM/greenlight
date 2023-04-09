@@ -22,10 +22,20 @@ type PermissionsRepo interface {
 func InitRouter(engine *gin.RouterGroup, handler Handler, permissionsRepo PermissionsRepo) {
 	movies := engine.Group("/movies")
 	{
-		movies.POST("", middlewares.RequirePermission(permissionsRepo, "movies:write"), handler.CreateMovie)
-		movies.GET("", middlewares.RequirePermission(permissionsRepo, "movies:read"), handler.ListMovies)
-		movies.GET("/:id", middlewares.RequirePermission(permissionsRepo, "movies:read"), handler.ShowMovie)
-		movies.PATCH("/:id", middlewares.RequirePermission(permissionsRepo, "movies:write"), handler.UpdateMovie)
-		movies.DELETE("/:id", middlewares.RequirePermission(permissionsRepo, "movies:write"), handler.DeleteMovie)
+		// minimizar los lugares donde definimos strings magicos
+		// despues tenemos un typo y no anda nada
+		movies.POST("", requireWritePermission(permissionsRepo), handler.CreateMovie)
+		movies.GET("", requireReadPermission(permissionsRepo), handler.ListMovies)
+		movies.GET("/:id", requireReadPermission(permissionsRepo), handler.ShowMovie)
+		movies.PATCH("/:id", requireWritePermission(permissionsRepo), handler.UpdateMovie)
+		movies.DELETE("/:id", requireWritePermission(permissionsRepo), handler.DeleteMovie)
 	}
+}
+
+func requireWritePermission(permissionsRepo PermissionsRepo) gin.HandlerFunc {
+	return middlewares.RequirePermission(permissionsRepo, "movies:write")
+}
+
+func requireReadPermission(permissionsRepo PermissionsRepo) gin.HandlerFunc {
+	return middlewares.RequirePermission(permissionsRepo, "movies:read")
 }

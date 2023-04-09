@@ -16,7 +16,7 @@ type Handler struct {
 }
 
 func (h *Handler) Healthcheck(c *gin.Context) {
-	data := httphelpers.Envelope{
+	data := gin.H{
 		"status": "available",
 		"system_info": map[string]string{
 			"environment": h.Env,

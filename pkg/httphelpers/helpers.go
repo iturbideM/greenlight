@@ -23,9 +23,7 @@ func ReadIDParam(c *gin.Context) (int64, error) {
 	return id, nil
 }
 
-type Envelope map[string]any
-
-func WriteJson(c *gin.Context, status int, data Envelope, headers http.Header) error {
+func WriteJson(c *gin.Context, status int, data any, headers http.Header) error {
 	js, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
 		return err

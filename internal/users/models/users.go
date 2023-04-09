@@ -26,6 +26,7 @@ type Password struct {
 	Hash      []byte
 }
 
+// esto va en la capa de servicio/logica, asi es mas facil de testear y de cambiar
 func (p *Password) Set(plaintextPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextPassword), 12)
 	if err != nil {
@@ -38,6 +39,7 @@ func (p *Password) Set(plaintextPassword string) error {
 	return nil
 }
 
+// esto va en la capa de servicio/logica, asi es mas facil de testear y de cambiar
 func (p *Password) Matches(plaintextPassword string) (bool, error) {
 	err := bcrypt.CompareHashAndPassword(p.Hash, []byte(plaintextPassword))
 	if err != nil {

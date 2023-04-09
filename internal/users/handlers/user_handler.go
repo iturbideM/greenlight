@@ -79,6 +79,8 @@ func (h *UserHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// y la capa de servicio/logica??
+	// esto refactorealo a otro paquete
 	err = h.UserRepo.Insert(c, user)
 	if err != nil {
 		switch {
@@ -116,8 +118,8 @@ func (h *UserHandler) Register(c *gin.Context) {
 			}
 		})
 	}()
-
-	err = httphelpers.WriteJson(c, http.StatusCreated, httphelpers.Envelope{"user": user}, nil)
+	// hasta aca va todo en capa de servicio, devolviendo el error correspondiente a cada caso
+	err = httphelpers.WriteJson(c, http.StatusCreated, gin.H{"user": user}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
@@ -141,6 +143,7 @@ func (h *UserHandler) ActivateUser(c *gin.Context) {
 		return
 	}
 
+	// capa de servicio
 	user, err := h.UserRepo.GetForToken(models.ScopeActivation, input.TokenPlaintext)
 	if err != nil {
 		switch {
@@ -171,8 +174,9 @@ func (h *UserHandler) ActivateUser(c *gin.Context) {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 		return
 	}
+	// hasta aca en capa de servicio
 
-	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"user": user}, nil)
+	err = httphelpers.WriteJson(c, http.StatusOK, gin.H{"user": user}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}

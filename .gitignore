@@ -22,3 +22,6 @@ go.work
 
 # Testdata directory
 testdata/
+
+# temporary files
+tmp/
