@@ -27,6 +27,7 @@ type PermissionsRepo interface {
 	GetAllForUser(userID int64) (permissionsModels.Permissions, error)
 }
 
+// a su propio archivo
 func RecoverPanic() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
@@ -38,6 +39,7 @@ func RecoverPanic() gin.HandlerFunc {
 	}
 }
 
+// a su propio archivo
 func LogErrorMiddleware(l *jsonlog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
@@ -51,15 +53,19 @@ func LogErrorMiddleware(l *jsonlog.Logger) gin.HandlerFunc {
 	}
 }
 
-func RateLimit(ratelimit, tokens int, enabled bool, l *jsonlog.Logger) gin.HandlerFunc {
-	type client struct {
-		limiter  *rate.Limiter
-		lastSeen time.Time
-	}
+// a su propio archivo
+type rlClient struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
 
+func RateLimit(ratelimit, tokens int, enabled bool, l *jsonlog.Logger) gin.HandlerFunc {
 	var (
-		mu      sync.Mutex
-		clients = make(map[string]*client)
+		mu sync.Mutex
+		// hay que tener cuidado con los mapas de vida infinita, porque pueden generar un memory leak
+		// una opcion seria usar un cache como redis (ideal)
+		// otra opcion es usar un map con un tiempo de vida, y que se limpie cada cierto tiempo
+		clients = make(map[string]*rlClient)
 	)
 
 	go func() {
@@ -90,7 +96,7 @@ func RateLimit(ratelimit, tokens int, enabled bool, l *jsonlog.Logger) gin.Handl
 			mu.Lock()
 
 			if _, found := clients[ip]; !found {
-				clients[ip] = &client{limiter: rate.NewLimiter(rate.Limit(ratelimit), tokens)}
+				clients[ip] = &rlClient{limiter: rate.NewLimiter(rate.Limit(ratelimit), tokens)}
 			}
 
 			clients[ip].lastSeen = time.Now()
@@ -107,6 +113,7 @@ func RateLimit(ratelimit, tokens int, enabled bool, l *jsonlog.Logger) gin.Handl
 	}
 }
 
+// a su propio archivo
 func Authenticate(UserRepo UserRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Vary", "Authorization")
@@ -179,6 +186,7 @@ func RequireActivatedUser(next gin.HandlerFunc) gin.HandlerFunc {
 	return RequireAuthenticatedUser(fn)
 }
 
+// a su propio archivo
 func RequirePermission(permissionsRepo PermissionsRepo, code string) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
 		user := httphelpers.ContextGetUser(c)

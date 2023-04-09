@@ -33,19 +33,26 @@ func (m Mailer) Send(recipient, templateFile string, data any) error {
 		return err
 	}
 
-	subject := new(bytes.Buffer)
+	// no se suele usar la funcion new, se suele usar el operador & para crear un puntero
+	// yo lo veo como que tiene 2 ventajas
+	// 1 - es mas claro que se esta creando un puntero
+	// 2 - es mas explicito que estamos con el valor cero del struct, y no nos confundimos con un
+	//        new de otro lenguaje que puede tener un comportamiento distinto
+	// ademas a nivel del compilador, un new le estas diciendo que aloque memoria en el heap
+	// mientras que el & seguramente entre en el stack que es sustancialmente mas rapido
+	subject := &bytes.Buffer{}
 	err = tmpl.ExecuteTemplate(subject, "subject", data)
 	if err != nil {
 		return err
 	}
 
-	plainbody := new(bytes.Buffer)
+	plainbody := &bytes.Buffer{}
 	err = tmpl.ExecuteTemplate(plainbody, "plainBody", data)
 	if err != nil {
 		return err
 	}
 
-	htmlbody := new(bytes.Buffer)
+	htmlbody := &bytes.Buffer{}
 	err = tmpl.ExecuteTemplate(htmlbody, "htmlBody", data)
 	if err != nil {
 		return err

@@ -22,6 +22,7 @@ type Token struct {
 	Scope     string    `json:"-"`
 }
 
+// esto lo dejaria en capa de servicio, asi es mas facil de testear y de cambiar
 func GenerateToken(userID int64, ttl time.Duration, scope string) (*Token, error) {
 	token := &Token{
 		UserID: userID,

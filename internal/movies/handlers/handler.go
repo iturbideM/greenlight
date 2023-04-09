@@ -33,14 +33,15 @@ type Handler struct {
 	Repo   Repo
 }
 
-func (h *Handler) CreateMovie(c *gin.Context) {
-	var input struct {
-		Title   string         `json:"title"`
-		Year    int32          `json:"year"`
-		Runtime models.Runtime `json:"runtime"`
-		Genres  []string       `json:"genres"`
-	}
+type createMovieInput struct {
+	Title   string         `json:"title"`
+	Year    int32          `json:"year"`
+	Runtime models.Runtime `json:"runtime"`
+	Genres  []string       `json:"genres"`
+}
 
+func (h *Handler) CreateMovie(c *gin.Context) {
+	var input createMovieInput
 	err := httphelpers.JSONDecode(c, &input)
 	if err != nil {
 		h.Logger.PrintError(err, nil)
@@ -73,7 +74,7 @@ func (h *Handler) CreateMovie(c *gin.Context) {
 	headers := make(http.Header)
 	headers.Set("Location", fmt.Sprintf("/v1/movies/%d", movie.ID))
 
-	err = httphelpers.WriteJson(c, http.StatusCreated, httphelpers.Envelope{"movie": movie}, headers)
+	err = httphelpers.WriteJson(c, http.StatusCreated, gin.H{"movie": movie}, headers)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
@@ -89,7 +90,7 @@ func (h *Handler) ShowMovie(c *gin.Context) {
 	movie, err := h.Repo.Get(id)
 	if err != nil {
 		switch {
-		case errors.Is(err, repositoryerrors.ErrRecordNotFound): // err == repositoryerrors.ErrRecordNotFound:
+		case errors.Is(err, repositoryerrors.ErrRecordNotFound):
 			httphelpers.StatusNotFoundResponse(c)
 		default:
 			httphelpers.StatusInternalServerErrorResponse(c, err)
@@ -97,10 +98,17 @@ func (h *Handler) ShowMovie(c *gin.Context) {
 		return
 	}
 
-	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movie": movie}, nil)
+	err = httphelpers.WriteJson(c, http.StatusOK, gin.H{"movie": movie}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
+}
+
+type updateMovieInput struct {
+	Title   *string         `json:"title"`
+	Year    *int32          `json:"year"`
+	Runtime *models.Runtime `json:"runtime"`
+	Genres  []string        `json:"genres"`
 }
 
 func (h *Handler) UpdateMovie(c *gin.Context) {
@@ -121,13 +129,7 @@ func (h *Handler) UpdateMovie(c *gin.Context) {
 		return
 	}
 
-	var input struct {
-		Title   *string         `json:"title"`
-		Year    *int32          `json:"year"`
-		Runtime *models.Runtime `json:"runtime"`
-		Genres  []string        `json:"genres"`
-	}
-
+	var input updateMovieInput
 	err = httphelpers.JSONDecode(c, &input)
 	if err != nil {
 		httphelpers.StatusBadRequestResponse(c, err.Error())
@@ -165,7 +167,7 @@ func (h *Handler) UpdateMovie(c *gin.Context) {
 		return
 	}
 
-	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movie": movie}, nil)
+	err = httphelpers.WriteJson(c, http.StatusOK, gin.H{"movie": movie}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
@@ -189,30 +191,33 @@ func (h *Handler) DeleteMovie(c *gin.Context) {
 		return
 	}
 
-	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"message": "movie successfully deleted"}, nil)
+	err = httphelpers.WriteJson(c, http.StatusOK, gin.H{"message": "movie successfully deleted"}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
 }
 
-func (h *Handler) ListMovies(c *gin.Context) {
-	var input struct {
-		Title  string
-		Genres []string
-		httphelpers.Filters
-	}
+type listMoviesInput struct {
+	Title  string
+	Genres []string
+	httphelpers.Filters
+}
 
+func (h *Handler) ListMovies(c *gin.Context) {
 	v := validator.New()
 
 	qs := c.Request.URL.Query()
 
-	input.Title = httphelpers.ReadString(qs, "title", "")
-	input.Genres = httphelpers.ReadCSV(qs, "genres", []string{})
-	input.Filters.Page = httphelpers.ReadInt(qs, "page", 1, v)
-	input.Filters.PageSize = httphelpers.ReadInt(qs, "page_size", 10, v)
-	input.Filters.Sort = httphelpers.ReadString(qs, "sort", "id")
-	input.Filters.SortSafeList = []string{"id", "title", "year", "runtime", "-id", "-title", "-year", "-runtime"}
-
+	input := listMoviesInput{
+		Title:  httphelpers.ReadString(qs, "title", ""),
+		Genres: httphelpers.ReadCSV(qs, "genres", []string{}),
+		Filters: httphelpers.Filters{
+			Page:         httphelpers.ReadInt(qs, "page", 1, v),
+			PageSize:     httphelpers.ReadInt(qs, "page_size", 10, v),
+			Sort:         httphelpers.ReadString(qs, "sort", "id"),
+			SortSafeList: []string{"id", "title", "year", "runtime", "-id", "-title", "-year", "-runtime"},
+		},
+	}
 	if httphelpers.ValidateFilters(v, input.Filters); !v.Valid() {
 		httphelpers.StatusUnprocesableEntities(c, v.Errors)
 		return
@@ -224,7 +229,7 @@ func (h *Handler) ListMovies(c *gin.Context) {
 		return
 	}
 
-	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"movies": movies, "metadata": metadata}, nil)
+	err = httphelpers.WriteJson(c, http.StatusOK, gin.H{"movies": movies, "metadata": metadata}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
