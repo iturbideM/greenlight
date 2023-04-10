@@ -12,6 +12,7 @@ import (
 
 	healthcheckHandler "greenlight/internal/healthcheck/handlers"
 	healthcheckRouter "greenlight/internal/healthcheck/router"
+	metricsRoutes "greenlight/internal/metrics"
 	moviesHandler "greenlight/internal/movies/handlers"
 	moviesRouter "greenlight/internal/movies/router"
 	permissionsRepo "greenlight/internal/permissions/repo"
@@ -102,7 +103,9 @@ func startRouter(info Info) *gin.Engine {
 	engine.NoRoute(gin.HandlerFunc(httphelpers.StatusNotFoundResponse))
 	engine.NoMethod(gin.HandlerFunc(httphelpers.StatusMethodNotAllowedResponse))
 	engine.Use(middlewares.LogErrorMiddleware(info.logger))
+	engine.Use(middlewares.Metrics())
 	engine.Use(middlewares.RecoverPanic())
+	engine.Use(middlewares.EnableCORS())
 	engine.Use(middlewares.RateLimit(int(info.cfg.limiter.rps), info.cfg.limiter.burst, info.cfg.limiter.enabled, info.logger))
 	engine.Use(middlewares.Authenticate(info.userRepo))
 
@@ -111,6 +114,7 @@ func startRouter(info Info) *gin.Engine {
 		healthcheckRouter.InitRouter(v1, info.healthcheckHandler)
 		moviesRouter.InitRouter(v1, info.moviesHandler, info.permissionsRepo)
 		userRouter.InitRouter(v1, info.userHandler, info.tokenHandler)
+		metricsRoutes.InitRouter(engine)
 	}
 
 	return engine

@@ -22,11 +22,9 @@ type PermissionsRepo interface {
 func InitRouter(engine *gin.RouterGroup, handler Handler, permissionsRepo PermissionsRepo) {
 	movies := engine.Group("/movies")
 	{
-		// movies.POST("", requireWritePermission(permissionsRepo), handler.CreateMovie)
-		movies.POST("", handler.CreateMovie)
+		movies.POST("", requireWritePermission(permissionsRepo), handler.CreateMovie)
 		movies.GET("", requireReadPermission(permissionsRepo), handler.ListMovies)
-		// movies.GET("/:id", requireReadPermission(permissionsRepo), handler.ShowMovie)
-		movies.GET("/:id", handler.ShowMovie)
+		movies.GET("/:id", requireReadPermission(permissionsRepo), handler.ShowMovie)
 		movies.PATCH("/:id", requireWritePermission(permissionsRepo), handler.UpdateMovie)
 		movies.DELETE("/:id", requireWritePermission(permissionsRepo), handler.DeleteMovie)
 	}

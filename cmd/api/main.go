@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"expvar"
 	"flag"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -111,10 +113,25 @@ func main() {
 		cfg:                cfg,
 	}
 
+	addMetrics(db)
+
 	err = Serve(info)
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}
+}
+
+func addMetrics(db *sqlx.DB) {
+	expvar.NewString("version").Set(version)
+	expvar.Publish("goroutines", expvar.Func(func() any {
+		return runtime.NumGoroutine()
+	}))
+	expvar.Publish("database", expvar.Func(func() any {
+		return db.Stats()
+	}))
+	expvar.Publish("timestamp", expvar.Func(func() any {
+		return time.Now().Unix()
+	}))
 }
 
 func openDB(cfg config) (*sqlx.DB, error) {

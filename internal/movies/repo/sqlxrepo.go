@@ -34,7 +34,7 @@ func (r *sqlxRepo) Insert(ctx context.Context, movie *models.Movie) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	row := r.db.QueryRowxContext(ctx, query, movie.Title, movie.Year, movie.Runtime, pq.Array(movie.Genres))
+	row := r.db.QueryRowxContext(ctx, query, movie.Title, movie.Year, movie.Runtime, movie.Genres)
 	if err := row.Err(); err != nil {
 		return err
 	}
@@ -62,21 +62,11 @@ func (r *sqlxRepo) Get(id int64) (*models.Movie, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// Esta seria la mejor forma de hacerlo con sqlx, el problema es que el Scan interno
-	// que hace GetContext no funciona con arrays, entonces para que funcione bien
-	// deberia crearme un DAO de tipo Movie y luego hacer un scan a ese tipo de dato
-
-	// err := r.db.GetContext(ctx, &movie, query, id)
-
-	// Esta es la forma que lo hace el libro. No esta tan buena, pero
-	// prefiero hacerlo asi ahora porque me da pereza hacer el DAO de Movie
-
-	row := r.db.QueryRowxContext(ctx, query, id)
-	if err := row.Err(); err != nil {
+	err := r.db.GetContext(ctx, &movie, query, id)
+	if err != nil {
 		return nil, err
 	}
 
-	err := scanMovie(row, &movie)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
