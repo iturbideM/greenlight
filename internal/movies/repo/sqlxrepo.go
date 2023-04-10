@@ -64,26 +64,19 @@ func (r *sqlxRepo) Get(id int64) (*models.Movie, error) {
 
 	// Esta seria la mejor forma de hacerlo con sqlx, el problema es que el Scan interno
 	// que hace GetContext no funciona con arrays, entonces para que funcione bien
-	// deberia crearme un DABO de tipo Movie y luego hacer un scan a ese tipo de dato
+	// deberia crearme un DAO de tipo Movie y luego hacer un scan a ese tipo de dato
 
 	// err := r.db.GetContext(ctx, &movie, query, id)
 
 	// Esta es la forma que lo hace el libro. No esta tan buena, pero
-	// prefiero hacerlo asi ahora porque me da pereza hacer el DABO de Movie
+	// prefiero hacerlo asi ahora porque me da pereza hacer el DAO de Movie
+
 	row := r.db.QueryRowxContext(ctx, query, id)
 	if err := row.Err(); err != nil {
 		return nil, err
 	}
 
-	err := row.Scan(
-		&movie.ID,
-		&movie.CreatedAt,
-		&movie.Title,
-		&movie.Year,
-		&movie.Runtime,
-		pq.Array(&movie.Genres),
-		&movie.Version,
-	)
+	err := scanMovie(row, &movie)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -94,6 +87,20 @@ func (r *sqlxRepo) Get(id int64) (*models.Movie, error) {
 	}
 
 	return &movie, nil
+}
+
+func scanMovie(row interface{ Scan(...any) error }, movie *models.Movie) error {
+	err := row.Scan(
+		&movie.ID,
+		&movie.CreatedAt,
+		&movie.Title,
+		&movie.Year,
+		&movie.Runtime,
+		&movie.Genres,
+		&movie.Version,
+	)
+
+	return err
 }
 
 func (r *sqlxRepo) Update(movie models.Movie) (models.Movie, error) {
@@ -180,16 +187,7 @@ func (r *sqlxRepo) GetAll(title string, genres []string, filters httphelpers.Fil
 	for rows.Next() {
 		var movie models.Movie
 
-		err := rows.Scan(
-			&totalRecords,
-			&movie.ID,
-			&movie.CreatedAt,
-			&movie.Title,
-			&movie.Year,
-			&movie.Runtime,
-			pq.Array(&movie.Genres),
-			&movie.Version,
-		)
+		err := scanMovie(rows, &movie)
 		if err != nil {
 			return nil, httphelpers.Metadata{}, err
 		}

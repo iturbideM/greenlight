@@ -60,7 +60,7 @@ func StatusForbiddenResponse(c *gin.Context) {
 // `{"error":"not found"}“
 func StatusNotFoundResponse(c *gin.Context) {
 	CustomStatusJSONPayloadResponse(c, http.StatusNotFound,
-		map[string]string{"error": "not found"})
+		map[string]string{"error": "not found"}, nil)
 }
 
 // StatusConflictResponse sets a 409 response and loads a JSON payload containing
@@ -86,57 +86,57 @@ func StatusInternalServerErrorResponse(c *gin.Context, err error) {
 //
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(http.StatusOK, payload)
 func StatusOKJSONPayloadResponse(c *gin.Context, payload any) error {
-	return CustomStatusJSONPayloadResponse(c, http.StatusOK, payload)
+	return CustomStatusJSONPayloadResponse(c, http.StatusOK, payload, nil)
 }
 
 // StatusCreatedJSONPayloadResponse is a shorthand for CustomStatusJSONPayloadResponse with status 201
 //
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(http.StatusCreated, payload)
 func StatusCreatedJSONPayload(c *gin.Context, payload any) error {
-	return CustomStatusJSONPayloadResponse(c, http.StatusCreated, payload)
+	return CustomStatusJSONPayloadResponse(c, http.StatusCreated, payload, nil)
 }
 
 // StatusBadRequestJSONPayloadResponse is a shorthand for CustomStatusJSONPayloadResponse with status 400
 //
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(http.StatusBadRequest, payload)
 func StatusBadRequestJSONPayloadResponse(c *gin.Context, payload any) error {
-	return CustomStatusJSONPayloadResponse(c, http.StatusBadRequest, payload)
+	return CustomStatusJSONPayloadResponse(c, http.StatusBadRequest, payload, nil)
 }
 
 // StatusUnauthorizedJSONPayloadResponse is a shorthand for CustomStatusJSONPayloadResponse with status 401
 //
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(http.StatusUnauthorized, payload)
 func StatusUnauthorizedJSONPayloadResponse(c *gin.Context, payload any) error {
-	return CustomStatusJSONPayloadResponse(c, http.StatusUnauthorized, payload)
+	return CustomStatusJSONPayloadResponse(c, http.StatusUnauthorized, payload, nil)
 }
 
 // StatusJSONPayloadResponse is a shorthand for CustomStatusJSONPayloadResponse with status 403
 //
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(http.StatusForbidden, payload)
 func StatusForbiddenJSONPayloadResponse(c *gin.Context, payload any) error {
-	return CustomStatusJSONPayloadResponse(c, http.StatusForbidden, payload)
+	return CustomStatusJSONPayloadResponse(c, http.StatusForbidden, payload, nil)
 }
 
 // StatusNotFoundResponse is a shorthand for CustomStatusPayloadResponse with status 404
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(http.StatusNotFound, payload)
 func StatusNotFoundPayloadResponse(c *gin.Context, payload any) {
-	CustomStatusPayloadResponse(c, http.StatusNotFound, payload, ContentTypeJSON)
+	CustomStatusPayloadResponse(c, http.StatusNotFound, payload, ContentTypeJSON, nil)
 }
 
 func StatusMethodNotAllowedResponse(c *gin.Context) {
 	message := gin.H{"error": fmt.Sprintf("the %s method is not allowed for the requested URL", c.Request.Method)}
-	CustomStatusJSONPayloadResponse(c, http.StatusMethodNotAllowed, message)
+	CustomStatusJSONPayloadResponse(c, http.StatusMethodNotAllowed, message, nil)
 }
 
 // CustomStatusJSONPayloadResponse is a shorthand for CustomStatusPayloadResponse with ContentTypeJSON
 //
 // If you do not wish to handle the error, and are ok with a 400 response on error, feel free to use c.JSON(status, payload)
-func CustomStatusJSONPayloadResponse(c *gin.Context, status int, payload any) error {
-	return CustomStatusPayloadResponse(c, status, payload, ContentTypeJSON)
+func CustomStatusJSONPayloadResponse(c *gin.Context, status int, payload any, header http.Header) error {
+	return CustomStatusPayloadResponse(c, status, payload, ContentTypeJSON, header)
 }
 
 func RateLimitExceededResponse(c *gin.Context) {
-	CustomStatusJSONPayloadResponse(c, http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+	CustomStatusJSONPayloadResponse(c, http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"}, nil)
 }
 
 // If you do not want to handle the error, and are ok with a 400 response on error, feel free to use gin context's functions
@@ -144,14 +144,14 @@ func RateLimitExceededResponse(c *gin.Context) {
 // Valid ContentType: "application/json", "application/xml", "text/html"
 //
 // "text/html" expects a string as payload
-func CustomStatusPayloadResponse(c *gin.Context, status int, payload any, contentType ContentType) error {
+func CustomStatusPayloadResponse(c *gin.Context, status int, payload any, contentType ContentType, headers http.Header) error {
 	var (
 		pL  = []byte{}
 		err error
 	)
 	switch contentType {
 	case ContentTypeJSON:
-		pL, err = json.Marshal(payload)
+		pL, err = json.MarshalIndent(payload, "", "\t")
 		if err != nil {
 			return err
 		}
@@ -169,8 +169,14 @@ func CustomStatusPayloadResponse(c *gin.Context, status int, payload any, conten
 	default:
 		return ErrUnknownContentType
 	}
+
+	for key, value := range headers {
+		c.Writer.Header()[key] = value
+	}
+
 	c.Status(status)
 	c.Header("Content-Type", string(contentType))
+
 	_, err = c.Writer.Write(pL)
 	return err
 }

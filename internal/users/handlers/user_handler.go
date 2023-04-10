@@ -10,7 +10,6 @@ import (
 	"greenlight/internal/users/models"
 	"greenlight/pkg/httphelpers"
 	"greenlight/pkg/mailer"
-	"greenlight/pkg/taskutils"
 	"greenlight/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -39,20 +38,28 @@ type PermissionsRepo interface {
 	AddForUser(userID int64, codes ...string) error
 }
 
+type UserService interface {
+	RegisterUser(context context.Context, user models.User) (*models.User, error)
+	ActivateUser(context context.Context, tokenPlaintext string) (*models.User, error)
+}
+
 type UserHandler struct {
 	UserRepo        UserRepo
 	TokenRepo       TokenRepo
 	PermissionsRepo PermissionsRepo
 	Logger          Logger
 	Mailer          mailer.Mailer
+	UserService     UserService
+}
+
+type UserRegisterInput struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 func (h *UserHandler) Register(c *gin.Context) {
-	var input struct {
-		Name     string `json:"name"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var input UserRegisterInput
 
 	err := httphelpers.JSONDecode(c, &input)
 	if err != nil {
@@ -73,13 +80,12 @@ func (h *UserHandler) Register(c *gin.Context) {
 	}
 
 	v := validator.New()
-
 	if models.ValidateUser(v, user); !v.Valid() {
 		httphelpers.StatusUnprocesableEntities(c, v.Errors)
 		return
 	}
 
-	err = h.UserRepo.Insert(c, user)
+	user, err = h.UserService.RegisterUser(c, *user)
 	if err != nil {
 		switch {
 		case errors.Is(err, repositoryerrors.ErrDuplicateEmail):
@@ -92,42 +98,18 @@ func (h *UserHandler) Register(c *gin.Context) {
 		return
 	}
 
-	err = h.PermissionsRepo.AddForUser(user.ID, "movies:read")
-	if err != nil {
-		httphelpers.StatusInternalServerErrorResponse(c, err)
-		return
-	}
-
-	token, err := h.TokenRepo.New(user.ID, 24*3*time.Hour, models.ScopeActivation)
-	if err != nil {
-		httphelpers.StatusInternalServerErrorResponse(c, err)
-		return
-	}
-
-	go func() {
-		taskutils.BackgroundTask(h.Logger, func() {
-			data := map[string]any{
-				"activationToken": token.Plaintext,
-				"userID":          user.ID,
-			}
-			err = h.Mailer.Send(user.Email, "user_welcome.tmpl", data)
-			if err != nil {
-				h.Logger.PrintError(err, nil)
-			}
-		})
-	}()
-
-	err = httphelpers.WriteJson(c, http.StatusCreated, httphelpers.Envelope{"user": user}, nil)
+	err = httphelpers.CustomStatusJSONPayloadResponse(c, http.StatusCreated, gin.H{"user": user}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}
 }
 
-func (h *UserHandler) ActivateUser(c *gin.Context) {
-	var input struct {
-		TokenPlaintext string `json:"token"`
-	}
+type ActivateUserInput struct {
+	TokenPlaintext string `json:"token"`
+}
 
+func (h *UserHandler) ActivateUser(c *gin.Context) {
+	var input ActivateUserInput
 	err := httphelpers.JSONDecode(c, &input)
 	if err != nil {
 		httphelpers.StatusBadRequestResponse(c, err.Error())
@@ -141,38 +123,20 @@ func (h *UserHandler) ActivateUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.UserRepo.GetForToken(models.ScopeActivation, input.TokenPlaintext)
+	user, err := h.UserService.ActivateUser(c, input.TokenPlaintext)
 	if err != nil {
 		switch {
 		case errors.Is(err, repositoryerrors.ErrRecordNotFound):
 			v.AddError("token", "invalid or expired activation token")
 			httphelpers.StatusUnprocesableEntities(c, v.Errors)
-		default:
-			httphelpers.StatusInternalServerErrorResponse(c, err)
-		}
-		return
-	}
-
-	user.Activated = true
-
-	err = h.UserRepo.Update(c, user)
-	if err != nil {
-		switch {
 		case errors.Is(err, repositoryerrors.ErrEditConflict):
 			httphelpers.StatusConflictResponse(c)
 		default:
 			httphelpers.StatusInternalServerErrorResponse(c, err)
 		}
-		return
 	}
 
-	err = h.TokenRepo.DeleteAllForUser(models.ScopeActivation, user.ID)
-	if err != nil {
-		httphelpers.StatusInternalServerErrorResponse(c, err)
-		return
-	}
-
-	err = httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"user": user}, nil)
+	err = httphelpers.CustomStatusJSONPayloadResponse(c, http.StatusOK, gin.H{"user": user}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 	}

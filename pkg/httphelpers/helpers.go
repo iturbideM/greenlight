@@ -1,8 +1,6 @@
 package httphelpers
 
 import (
-	"encoding/json"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -21,27 +19,6 @@ func ReadIDParam(c *gin.Context) (int64, error) {
 	}
 
 	return id, nil
-}
-
-type Envelope map[string]any
-
-func WriteJson(c *gin.Context, status int, data Envelope, headers http.Header) error {
-	js, err := json.MarshalIndent(data, "", "\t")
-	if err != nil {
-		return err
-	}
-
-	js = append(js, '\n')
-
-	for key, value := range headers {
-		c.Writer.Header()[key] = value
-	}
-
-	c.Writer.Header().Set("Content-Type", "application/json")
-	c.Writer.WriteHeader(status)
-	c.Writer.Write(js)
-
-	return nil
 }
 
 func ReadString(qs url.Values, key string, defaultValue string) string {

@@ -33,19 +33,19 @@ func (m Mailer) Send(recipient, templateFile string, data any) error {
 		return err
 	}
 
-	subject := new(bytes.Buffer)
+	subject := &bytes.Buffer{}
 	err = tmpl.ExecuteTemplate(subject, "subject", data)
 	if err != nil {
 		return err
 	}
 
-	plainbody := new(bytes.Buffer)
+	plainbody := &bytes.Buffer{}
 	err = tmpl.ExecuteTemplate(plainbody, "plainBody", data)
 	if err != nil {
 		return err
 	}
 
-	htmlbody := new(bytes.Buffer)
+	htmlbody := &bytes.Buffer{}
 	err = tmpl.ExecuteTemplate(htmlbody, "htmlBody", data)
 	if err != nil {
 		return err

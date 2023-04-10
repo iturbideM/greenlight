@@ -68,7 +68,7 @@ func (h TokenHandler) CreateAuthenticationToken(c *gin.Context) {
 		return
 	}
 
-	httphelpers.WriteJson(c, http.StatusOK, httphelpers.Envelope{"token": token}, nil)
+	httphelpers.CustomStatusJSONPayloadResponse(c, http.StatusOK, gin.H{"token": token}, nil)
 	if err != nil {
 		httphelpers.StatusInternalServerErrorResponse(c, err)
 		return

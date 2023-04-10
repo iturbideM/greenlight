@@ -16,7 +16,7 @@ type Handler struct {
 }
 
 func (h *Handler) Healthcheck(c *gin.Context) {
-	data := httphelpers.Envelope{
+	data := gin.H{
 		"status": "available",
 		"system_info": map[string]string{
 			"environment": h.Env,
@@ -24,7 +24,7 @@ func (h *Handler) Healthcheck(c *gin.Context) {
 		},
 	}
 
-	err := httphelpers.WriteJson(c, http.StatusOK, data, nil)
+	err := httphelpers.CustomStatusJSONPayloadResponse(c, http.StatusOK, data, nil)
 	if err != nil {
 		h.Logger.Println(err)
 		httphelpers.StatusInternalServerErrorResponse(c, err)
